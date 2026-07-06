@@ -14,9 +14,14 @@ logger = logging.getLogger(__name__)
 class CropSource(grain.sources.RandomAccessDataSource):
     """A data source which outputs a cropped segment of each recording."""
 
-    def __init__(self, ds_config: DatasetConfig, include_subject_ids: list[str] | None = None) -> grain.MapDataset:
+    def __init__(self,
+            ds_config: DatasetConfig,
+            include_subject_ids: list[str] | None = None,
+            seed: int | None = None) -> grain.MapDataset:
         self.ds_config = ds_config
         self.include_subject_ids = include_subject_ids
+        self.seed = seed
+        self._rng = np.random.default_rng(seed)
 
         # Read the dataset directory tree
         # ds_tree = {
@@ -28,6 +33,7 @@ class CropSource(grain.sources.RandomAccessDataSource):
         # }
 
         # Read the dataset subject directories to a list
+        # TODO: logging not working?
         logger.info(f'Reading subject dirs from {ds_config.ds_dir / ds_config.series_name}')
         subject_dirs = self._get_subject_dirs(ds_config.ds_dir, ds_config.series_name)
         if include_subject_ids is not None:
@@ -47,10 +53,10 @@ class CropSource(grain.sources.RandomAccessDataSource):
         return len(self.subjects)
 
     def __getitem__(self, idx: int):
-        return self._load_element(self.subjects[idx], self.ds_config)
+        return self._load_element(self.subjects[idx], self.ds_config, self._rng)
 
     @staticmethod
-    def _get_subject_dirs(ds_dir: Path, series_name: str):
+    def _get_subject_dirs(ds_dir: Path, series_name: str) -> list[Path]:
         series_dir = ds_dir / series_name
         subject_dirs = [
             subject_dir for subject_dir in series_dir.iterdir() if subject_dir.is_dir() and not subject_dir.name.startswith('.')
@@ -59,7 +65,7 @@ class CropSource(grain.sources.RandomAccessDataSource):
         return subject_dirs
 
     @staticmethod
-    def _get_roi_start_end(subject_dir: Path, src_type: str, src_name: str, epoch_sec: float = 30.0):
+    def _get_roi_start_end(subject_dir: Path, src_type: str, src_name: str, epoch_sec: float = 30.0) -> tuple[int, int]:
         """Resolve the region of interest based on roi_src_type and roi_src_name.""" 
         if src_type == 'annotation':
             annotations = CropSource._read_annotations(subject_dir, src_name)
@@ -99,7 +105,7 @@ class CropSource(grain.sources.RandomAccessDataSource):
         return start, end
 
     @staticmethod
-    def _read_sample_array(subject_dir: Path, sarr_name: str, return_attributes: bool = False):
+    def _read_sample_array(subject_dir: Path, sarr_name: str, return_attributes: bool = False) -> np.array:
         s = np.load(subject_dir / sarr_name / 'data.npy', mmap_mode='r')
         if return_attributes:
             with open(subject_dir / sarr_name / 'attributes.json', 'rb') as f:
@@ -109,7 +115,7 @@ class CropSource(grain.sources.RandomAccessDataSource):
         return s
     
     @staticmethod
-    def _read_annotations(subject_dir: Path, annotation_name: str):
+    def _read_annotations(subject_dir: Path, annotation_name: str) -> list[slf.models.Annotation]:
         with open(subject_dir / f'{annotation_name}.a.json', 'rb') as f:
             raw_data = f.read()
             annotations = slf.models.BaseAnnotations.model_validate_json(raw_data)
@@ -117,13 +123,15 @@ class CropSource(grain.sources.RandomAccessDataSource):
         return annotations.annotations
 
     @staticmethod
-    def _load_element(subject: dict[str, Any], ds_config: DatasetConfig) -> dict[str, Any]:
+    def _load_element(subject: dict[str, Any], ds_config: DatasetConfig, rng: np.random.Generator) -> dict[str, Any]:
         res = {}
         epoch_sec = 30.0
 
         if ds_config.start_sec == -1.0:
-            rng = np.random.default_rng()
-            start_interval = rng.uniform(subject['roi_start'] / epoch_sec, (subject['roi_end'] - ds_config.duration) / epoch_sec)
+            start_interval = rng.uniform(
+                subject['roi_start'] / epoch_sec,
+                (subject['roi_end'] - ds_config.duration) / epoch_sec
+            )
             start_sec = start_interval * epoch_sec
         else:
             start_sec = subject['roi_start'] + ds_config.start_sec
@@ -144,7 +152,7 @@ class CropSource(grain.sources.RandomAccessDataSource):
         return res
 
     @staticmethod
-    def _load_component(subject_dir: Path, cfg: ComponentConfig, start_sec: float, duration: float):
+    def _load_component(subject_dir: Path, cfg: ComponentConfig, start_sec: float, duration: float) -> Any:
         if cfg.ctype == 'sample_array':
             return CropSource._load_sample_array(subject_dir, cfg, start_sec, duration)
         elif cfg.ctype == 'annotation':
