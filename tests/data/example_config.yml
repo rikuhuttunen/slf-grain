@@ -1,0 +1,45 @@
+ds_dir: "/path/to/dataset"
+series_name: "series1"
+
+start_sec: 0.0
+duration: -1.0
+
+roi_src_type: "annotation"
+roi_src_name: "scorer_1_hypnogram"
+
+components:
+
+  c1:
+    src_name: "s1"
+    ctype: "sample_array"
+    fs: 32.0
+
+  c2:
+    src_name: "s2"
+    ctype: "sample_array"
+    fs: 64.0
+
+  events:
+    src_name: "automatic_aasmevents.a.json"
+    ctype: "annotation"
+    fs: 1.0
+    return_type: "bbox"
+    value_map:
+      APNEA_OBSTRUCTIVE: 1
+      APNEA_CENTRAL: 1
+      APNEA_MIXED: 1
+      HYPOPNEA: 2
+      _default: 0
+
+  hypnogram:
+    src_name: "scorer_1_hypnogram.a.json"
+    ctype: "annotation"
+    sampling_interval: 30.0
+    return_type: "segmentation_combined"
+    value_map:
+      W: 0
+      N1: 1
+      N2: 2
+      N3: 3
+      R: 4
+      _default: 0 
