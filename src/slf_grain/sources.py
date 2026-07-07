@@ -105,27 +105,12 @@ class CropSource(grain.sources.RandomAccessDataSource):
         return start, end
 
     @staticmethod
-    def _read_sample_array(subject_dir: Path, sarr_name: str, return_attributes: bool = False) -> np.array:
-        s = np.load(subject_dir / sarr_name / 'data.npy', mmap_mode='r')
-        if return_attributes:
-            with open(subject_dir / sarr_name / 'attributes.json', 'rb') as f:
-                raw_data = f.read()
-                attributes = slf.models.ArrayAttributes.model_validate_json(raw_data)
-                return s, attributes
-        return s
-    
-    @staticmethod
-    def _read_annotations(subject_dir: Path, annotation_name: str) -> list[slf.models.Annotation]:
-        with open(subject_dir / f'{annotation_name}.a.json', 'rb') as f:
-            raw_data = f.read()
-            annotations = slf.models.BaseAnnotations.model_validate_json(raw_data)
-
-        return annotations.annotations
-
-    @staticmethod
-    def _load_element(subject: dict[str, Any], ds_config: DatasetConfig, rng: np.random.Generator) -> dict[str, Any]:
+    def _load_element(
+            subject: dict[str, Any],
+            ds_config: DatasetConfig,
+            rng: np.random.Generator,
+            epoch_sec: float = 30.0) -> dict[str, Any]:
         res = {}
-        epoch_sec = 30.0
 
         if ds_config.start_sec == -1.0:
             start_interval = rng.uniform(
@@ -166,7 +151,7 @@ class CropSource(grain.sources.RandomAccessDataSource):
         start_idx = int(start_sec * fs)
         end_idx = int(start_idx + duration * fs)
 
-        s = np.load(subject_dir / cfg.src_name / 'data.npy', mmap_mode='r')
+        s = CropSource._read_sample_array(subject_dir, cfg.src_name, return_attributes=False)
         s = s[start_idx:end_idx]
 
         return s[..., np.newaxis]
@@ -227,3 +212,21 @@ class CropSource(grain.sources.RandomAccessDataSource):
 
         else:
             raise AttributeError(f'Unsupported return_type {cfg.return_type}')
+
+    @staticmethod
+    def _read_sample_array(subject_dir: Path, sarr_name: str, return_attributes: bool = False) -> np.array:
+        s = np.load(subject_dir / sarr_name / 'data.npy', mmap_mode='r')
+        if return_attributes:
+            with open(subject_dir / sarr_name / 'attributes.json', 'rb') as f:
+                raw_data = f.read()
+                attributes = slf.models.ArrayAttributes.model_validate_json(raw_data)
+                return s, attributes
+        return s
+
+    @staticmethod
+    def _read_annotations(subject_dir: Path, annotation_name: str) -> list[slf.models.Annotation]:
+        with open(subject_dir / f'{annotation_name}.a.json', 'rb') as f:
+            raw_data = f.read()
+            annotations = slf.models.BaseAnnotations.model_validate_json(raw_data)
+
+        return annotations.annotations
