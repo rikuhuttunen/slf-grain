@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 def from_slf(
         ds_config: slf_grain.config.DatasetConfig,
-        include_subject_ids: list[str],
+        include_subject_ids: list[str] | None = None,
         seed: int | None = None) -> grain.MapDataset:
     if ds_config.start_sec == -1.0:
         assert ds_config.duration > 0.0, 'Need to define start_sec or duration'
