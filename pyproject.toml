@@ -25,7 +25,9 @@ classifiers = [
   "Programming Language :: Python :: Implementation :: PyPy",
 ]
 dependencies = [
-  "grain",
+  # Use grain-nightly instead of grain for now
+  # https://github.com/google/grain/issues/1411
+  "grain-nightly",
   "sleeplab-format>=0.4.0",
 ]
 
